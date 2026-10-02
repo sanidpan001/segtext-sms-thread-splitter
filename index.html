@@ -1,0 +1,1004 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SegText — Free SMS Character Counter, Segment Calculator & Thread Splitter</title>
+<meta name="description" content="SegText is a free SMS character counter and SMS segment calculator with true GSM-7/UCS-2 carrier math, a unicode-trap optimizer, cost estimator and a smart thread splitter for X, Threads and Bluesky.">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = { theme: { extend: {
+  colors: { ink: '#12241A', deep: '#0B1A12', card: '#1A3122', lcd: '#9EE37D', lcddark: '#6FBF4E', sunny: '#FFD23F', cream: '#F2FBE9' },
+  fontFamily: { display: ['Archivo Black','system-ui','sans-serif'], mono: ['Space Mono','ui-monospace','monospace'] }
+} } };
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Mono:wght@400;700&family=Archivo:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  body { background:#12241A; color:#F2FBE9; font-family:'Archivo',system-ui,sans-serif; }
+  .bg-glow { background:
+    radial-gradient(600px 300px at 15% 0%, rgba(158,227,125,.10), transparent 60%),
+    radial-gradient(700px 340px at 90% 20%, rgba(255,210,63,.07), transparent 60%),
+    radial-gradient(500px 500px at 50% 100%, rgba(158,227,125,.06), transparent 60%),
+    #12241A; }
+  /* ---- LCD screen ---- */
+  .lcd {
+    background: linear-gradient(160deg, #A9EC8B 0%, #9EE37D 55%, #86D261 100%);
+    color:#12241A;
+    box-shadow: inset 0 3px 14px rgba(18,36,26,.45), inset 0 -2px 6px rgba(255,255,255,.25);
+    position:relative; overflow:hidden;
+  }
+  .lcd::after {
+    content:""; position:absolute; inset:0; pointer-events:none;
+    background: repeating-linear-gradient(to bottom, rgba(18,36,26,.06) 0 1px, transparent 1px 3px);
+  }
+  .lcd-flicker { animation: lcdflick 7s infinite; }
+  @keyframes lcdflick { 0%,96%,100% {opacity:1;} 97% {opacity:.86;} 98% {opacity:1;} }
+  .lcd-digit { font-family:'Space Mono',monospace; text-shadow: 0 0 6px rgba(18,36,26,.35); }
+  /* ---- chunky candybar keys ---- */
+  .chunky {
+    background:#FFD23F; color:#12241A; font-weight:700;
+    border-radius:1rem; box-shadow: 0 6px 0 #a8842a, 0 10px 18px rgba(0,0,0,.35);
+    transition: transform .06s ease, box-shadow .06s ease;
+    user-select:none;
+  }
+  .chunky:active { transform: translateY(5px); box-shadow: 0 1px 0 #a8842a, 0 4px 8px rgba(0,0,0,.3); }
+  .chunky-green { background:#9EE37D; box-shadow: 0 6px 0 #4e8a35, 0 10px 18px rgba(0,0,0,.35); }
+  .chunky-green:active { box-shadow: 0 1px 0 #4e8a35, 0 4px 8px rgba(0,0,0,.3); }
+  .chunky-ghost { background:#23402C; color:#9EE37D; box-shadow: 0 6px 0 #101f16, 0 10px 18px rgba(0,0,0,.35); }
+  .chunky-ghost:active { box-shadow: 0 1px 0 #101f16, 0 4px 8px rgba(0,0,0,.3); }
+  .plat-btn.active { background:#FFD23F; color:#12241A; border-color:#FFD23F; }
+  .seg-block { transition: width .25s ease; }
+  textarea, input, select { color-scheme: dark; }
+  .lcd textarea { color-scheme: light; }
+  details summary::-webkit-details-marker { display:none; }
+  .tick { font-variant-numeric: tabular-nums; }
+  @media (prefers-reduced-motion: reduce) { .lcd-flicker { animation:none; } }
+</style>
+</head>
+<body id="top" class="bg-glow antialiased min-h-screen flex flex-col">
+
+<!-- ============ STICKY HEADER ============ -->
+<header class="sticky top-0 z-50 bg-[#0B1A12]/92 backdrop-blur border-b border-[#9EE37D]/20">
+  <div class="mx-auto max-w-6xl px-4 sm:px-6 h-16 flex items-center justify-between">
+    <a href="#top" class="flex items-center gap-2.5">
+      <span class="w-10 h-10 rounded-2xl bg-[#9EE37D] grid place-items-center shadow-[0_4px_0_#4e8a35]">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <rect x="7" y="2.5" width="10" height="19" rx="2.5" fill="#12241A"/>
+          <rect x="9" y="5.5" width="6" height="9" rx="1" fill="#9EE37D"/>
+          <circle cx="12" cy="18" r="1.4" fill="#9EE37D"/>
+          <rect x="10" y="3.6" width="4" height="0.9" rx="0.45" fill="#9EE37D"/>
+        </svg>
+      </span>
+      <span class="font-display text-xl tracking-tight text-white">Seg<span class="text-[#9EE37D]">Text</span></span>
+    </a>
+    <nav class="flex items-center gap-5 text-sm font-semibold">
+      <a href="#top" class="text-[#F2FBE9]/80 hover:text-[#FFD23F] transition-colors">Home</a>
+      <a href="https://fixoraa.tech" class="text-[#F2FBE9]/80 hover:text-[#FFD23F] transition-colors">More Tools</a>
+    </nav>
+  </div>
+</header>
+
+<!-- ============ HERO ============ -->
+<section class="mx-auto max-w-6xl px-4 sm:px-6 pt-10 pb-4 text-center">
+  <div class="inline-flex items-center gap-2 rounded-full border border-[#9EE37D]/40 bg-[#9EE37D]/10 px-4 py-1.5 text-xs font-bold tracking-widest uppercase text-[#9EE37D] mb-5">
+    <span class="w-2 h-2 rounded-full bg-[#FFD23F] animate-pulse"></span>
+    Unlimited Free Usage &middot; No signup &middot; No paywall
+  </div>
+  <h1 class="font-display text-3xl sm:text-5xl leading-tight text-white">SMS Character Counter,<br class="hidden sm:block"> <span class="text-[#9EE37D]">Segment Calculator</span> <span class="text-[#FFD23F]">&amp; Thread Splitter</span></h1>
+  <p class="mt-4 max-w-2xl mx-auto text-[#F2FBE9]/70 text-base sm:text-lg">Type any message and SegText runs the real carrier math — true GSM-7 / UCS-2 encoding detection, septet counting, UDH segment rules — then hunts down unicode traps, prices your segments, and splits long posts into numbered threads for X, Threads and Bluesky.</p>
+</section>
+
+<!-- TOP AD (verbatim) -->
+<div class="no-print mx-auto max-w-6xl px-4 sm:px-6 pt-4" role="complementary" aria-label="Advertisement">
+  <div class="mx-auto text-center" style="max-width:728px">
+    <span class="block text-[10px] tracking-[0.18em] uppercase text-slate-400 mb-1.5">Advertisement</span>
+    <div class="flex justify-center overflow-hidden">
+      <div class="origin-top scale-[0.44] sm:scale-100 shrink-0">
+        <script>
+          atOptions = { 'key' : '4e68ac77881c17fe128a46565d9a4e8c', 'format' : 'iframe', 'height' : 90, 'width' : 728, 'params' : {} };
+        </script>
+        <script src="https://www.highrevenueformat.com/4e68ac77881c17fe128a46565d9a4e8c/invoke.js"></script>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ TOOL ============ -->
+<main class="mx-auto max-w-6xl px-4 sm:px-6 py-8 w-full">
+
+  <!-- ===== CANDYBAR PHONE : SMS COUNTER ===== -->
+  <section aria-label="SMS character counter and segment calculator" class="mx-auto max-w-xl">
+    <div class="rounded-[2.5rem] bg-[#0B1A12] border border-[#9EE37D]/25 p-4 sm:p-5 shadow-[0_30px_60px_-20px_rgba(0,0,0,.6)]">
+      <!-- speaker + brand -->
+      <div class="flex flex-col items-center pt-1 pb-3">
+        <div class="w-24 h-2 rounded-full bg-[#1A3122] border border-[#9EE37D]/20"></div>
+        <p class="mt-2 text-[10px] tracking-[0.35em] uppercase text-[#9EE37D]/50 font-mono">SegText &middot; SMS-9000</p>
+      </div>
+
+      <!-- LCD SCREEN -->
+      <div class="lcd lcd-flicker rounded-2xl p-4 sm:p-5">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <p class="text-[10px] font-bold tracking-[0.25em] uppercase opacity-70">Encoding</p>
+            <p id="encBadge" class="font-mono font-bold text-lg leading-tight">GSM-7</p>
+            <p id="encNote" class="text-[11px] opacity-70 font-mono">7-bit alphabet &middot; 160/seg</p>
+          </div>
+          <div class="text-right">
+            <p class="text-[10px] font-bold tracking-[0.25em] uppercase opacity-70">Segments</p>
+            <p class="lcd-digit font-bold text-5xl leading-none"><span id="segBig">1</span></p>
+          </div>
+        </div>
+        <div class="grid grid-cols-3 gap-2 mt-4 text-center">
+          <div class="rounded-lg bg-[#12241A]/10 border border-[#12241A]/15 py-2">
+            <p class="text-[9px] font-bold tracking-[0.2em] uppercase opacity-60">Units</p>
+            <p id="unitsVal" class="lcd-digit font-bold text-xl tick">0</p>
+          </div>
+          <div class="rounded-lg bg-[#12241A]/10 border border-[#12241A]/15 py-2">
+            <p class="text-[9px] font-bold tracking-[0.2em] uppercase opacity-60">Chars left</p>
+            <p id="leftVal" class="lcd-digit font-bold text-xl tick">160</p>
+          </div>
+          <div class="rounded-lg bg-[#12241A]/10 border border-[#12241A]/15 py-2">
+            <p class="text-[9px] font-bold tracking-[0.2em] uppercase opacity-60">Per segment</p>
+            <p id="perSegVal" class="lcd-digit font-bold text-xl tick">160</p>
+          </div>
+        </div>
+        <div class="mt-4">
+          <div class="flex justify-between text-[10px] font-bold tracking-[0.2em] uppercase opacity-70 mb-1.5">
+            <span>Segment map</span><span id="segMapLabel">1 &times; 160</span>
+          </div>
+          <div id="segBar" class="flex gap-1 h-5"></div>
+        </div>
+        <p id="extNote" class="hidden mt-3 text-[11px] font-mono font-bold bg-[#12241A]/15 rounded-lg px-2.5 py-1.5"></p>
+        <p id="trapNote" class="hidden mt-2 text-[11px] font-mono font-bold"></p>
+      </div>
+
+      <!-- composer -->
+      <div class="mt-4 rounded-2xl bg-[#1A3122] border border-[#9EE37D]/20 p-3">
+        <div class="flex items-center justify-between px-1 pb-2">
+          <label for="msgInput" class="text-[11px] font-bold tracking-[0.25em] uppercase text-[#9EE37D]/70">Compose message</label>
+          <span id="charVal" class="text-[11px] font-mono text-[#F2FBE9]/60 tick">0 chars</span>
+        </div>
+        <textarea id="msgInput" rows="5" spellcheck="false" placeholder="Type or paste your SMS here…"
+          class="w-full rounded-xl bg-[#0B1A12] border border-[#9EE37D]/25 text-[#F2FBE9] font-mono text-sm p-3.5 focus:border-[#FFD23F] focus:outline-none resize-y placeholder:text-[#F2FBE9]/30"></textarea>
+        <p id="msgError" class="hidden mt-2 text-xs font-semibold text-[#FFD23F] bg-[#FFD23F]/10 border border-[#FFD23F]/30 rounded-lg px-3 py-2"></p>
+      </div>
+
+      <!-- chunky keys -->
+      <div class="grid grid-cols-4 gap-2.5 sm:gap-3 mt-4 pb-1">
+        <button id="sampleBtn" class="chunky chunky-ghost py-3 text-xs sm:text-sm">SAMPLE</button>
+        <button id="optimizeKeyBtn" class="chunky chunky-green py-3 text-xs sm:text-sm">OPTIMIZE</button>
+        <button id="copyMsgBtn" class="chunky py-3 text-xs sm:text-sm">COPY</button>
+        <button id="clearMsgBtn" class="chunky chunky-ghost py-3 text-xs sm:text-sm">CLEAR</button>
+      </div>
+      <p class="text-center text-[10px] font-mono text-[#9EE37D]/40 mt-3 tracking-widest">MODEL ST-160 &middot; MADE FOR THUMBS</p>
+    </div>
+  </section>
+
+  <!-- ===== MODULES ===== -->
+  <div class="grid md:grid-cols-2 gap-6 mt-10">
+
+    <!-- UNICODE TRAP OPTIMIZER -->
+    <section aria-label="Unicode trap optimizer" class="rounded-3xl bg-[#1A3122] border border-[#9EE37D]/20 p-5 sm:p-7">
+      <div class="flex items-center gap-3 mb-1">
+        <span class="w-9 h-9 rounded-xl bg-[#FFD23F] text-[#12241A] grid place-items-center font-display text-lg shadow-[0_4px_0_#a8842a]">&#9889;</span>
+        <h2 class="font-display text-xl text-white">Unicode-Trap Optimizer</h2>
+      </div>
+      <p class="text-sm text-[#F2FBE9]/60 mb-4">Smart quotes, em-dashes and emoji silently force the whole message into UCS-2 and double your segments. We find them and suggest GSM-7-safe swaps.</p>
+      <button id="scanBtn" class="chunky chunky-green w-full py-3 text-sm mb-4">SCAN MESSAGE FOR TRAPS</button>
+      <div id="trapEmpty" class="text-sm text-[#F2FBE9]/50 font-mono">No scan yet — type a message above, then scan.</div>
+      <div id="trapResult" class="hidden">
+        <div class="grid grid-cols-3 gap-2 text-center mb-4">
+          <div class="rounded-xl bg-[#0B1A12] border border-[#9EE37D]/20 p-3">
+            <p class="text-[10px] font-bold tracking-widest uppercase text-[#F2FBE9]/50">Before</p>
+            <p id="beforeSeg" class="font-mono font-bold text-2xl text-[#FFD23F] tick">–</p>
+            <p id="beforeEnc" class="text-[10px] font-mono text-[#F2FBE9]/50">–</p>
+          </div>
+          <div class="rounded-xl bg-[#0B1A12] border border-[#9EE37D]/20 p-3 grid place-items-center">
+            <p class="font-display text-2xl text-[#9EE37D]">&rarr;</p>
+          </div>
+          <div class="rounded-xl bg-[#0B1A12] border border-[#9EE37D]/20 p-3">
+            <p class="text-[10px] font-bold tracking-widest uppercase text-[#F2FBE9]/50">After</p>
+            <p id="afterSeg" class="font-mono font-bold text-2xl text-[#9EE37D] tick">–</p>
+            <p id="afterEnc" class="text-[10px] font-mono text-[#F2FBE9]/50">–</p>
+          </div>
+        </div>
+        <p id="savedLine" class="text-sm font-bold text-[#9EE37D] mb-3"></p>
+        <ul id="trapList" class="space-y-2 max-h-56 overflow-y-auto pr-1"></ul>
+        <button id="applyFixBtn" class="chunky w-full py-3 text-sm mt-4">APPLY ALL FIXES TO MESSAGE</button>
+      </div>
+    </section>
+
+    <!-- COST ESTIMATOR -->
+    <section aria-label="SMS cost estimator" class="rounded-3xl bg-[#1A3122] border border-[#9EE37D]/20 p-5 sm:p-7">
+      <div class="flex items-center gap-3 mb-1">
+        <span class="w-9 h-9 rounded-xl bg-[#9EE37D] text-[#12241A] grid place-items-center font-display text-lg shadow-[0_4px_0_#4e8a35]">$</span>
+        <h2 class="font-display text-xl text-white">Segment Cost Estimator</h2>
+      </div>
+      <p class="text-sm text-[#F2FBE9]/60 mb-4">Carriers and SMS gateways bill per segment, not per message. Enter your per-segment rate to price the message above.</p>
+      <div class="grid grid-cols-2 gap-3 mb-4">
+        <div>
+          <label for="currencySel" class="block text-[11px] font-bold tracking-widest uppercase text-[#9EE37D]/70 mb-1.5">Currency</label>
+          <select id="currencySel" class="w-full rounded-xl bg-[#0B1A12] border border-[#9EE37D]/25 text-[#F2FBE9] font-mono text-sm p-3 focus:border-[#FFD23F] focus:outline-none">
+            <option value="$">USD ($)</option>
+            <option value="€">EUR (€)</option>
+            <option value="£">GBP (£)</option>
+            <option value="₹" selected>INR (₹)</option>
+            <option value="¥">JPY (¥)</option>
+          </select>
+        </div>
+        <div>
+          <label for="priceInput" class="block text-[11px] font-bold tracking-widest uppercase text-[#9EE37D]/70 mb-1.5">Price / segment</label>
+          <input id="priceInput" type="number" min="0" step="0.0001" value="0.20" inputmode="decimal"
+            class="w-full rounded-xl bg-[#0B1A12] border border-[#9EE37D]/25 text-[#F2FBE9] font-mono text-sm p-3 focus:border-[#FFD23F] focus:outline-none">
+        </div>
+      </div>
+      <div class="lcd rounded-2xl p-4 flex items-center justify-between">
+        <div>
+          <p class="text-[10px] font-bold tracking-[0.25em] uppercase opacity-70">Total cost</p>
+          <p id="costTotal" class="lcd-digit font-bold text-4xl tick">₹0.00</p>
+        </div>
+        <div class="text-right font-mono text-xs leading-relaxed opacity-80">
+          <p><span id="costSegs" class="font-bold">1</span> segment(s)</p>
+          <p>&times; <span id="costRate" class="font-bold">₹0.20</span> each</p>
+        </div>
+      </div>
+      <p id="costError" class="hidden mt-3 text-xs font-semibold text-[#FFD23F] bg-[#FFD23F]/10 border border-[#FFD23F]/30 rounded-lg px-3 py-2"></p>
+      <p class="mt-3 text-xs text-[#F2FBE9]/45">Example rates: promotional SMS in India often costs around ₹0.12–₹0.25 per segment; international routes vary widely. Your gateway bill is segments × this rate.</p>
+    </section>
+  </div>
+
+  <!-- ===== THREAD SPLITTER ===== -->
+  <section aria-label="Thread splitter for X, Threads and Bluesky" class="rounded-3xl bg-[#1A3122] border border-[#9EE37D]/20 p-5 sm:p-7 mt-6">
+    <div class="flex items-center gap-3 mb-1">
+      <span class="w-9 h-9 rounded-xl bg-[#FFD23F] text-[#12241A] grid place-items-center font-display text-lg shadow-[0_4px_0_#a8842a]">&#128241;</span>
+      <h2 class="font-display text-xl text-white">Multi-Platform Thread Splitter</h2>
+    </div>
+    <p class="text-sm text-[#F2FBE9]/60 mb-4">Paste a long post, pick a platform, and get clean word-boundary chunks with numbered <span class="font-mono text-[#FFD23F]">(1/5)</span> prefixes — ready to post as a thread.</p>
+    <div class="flex flex-wrap gap-2.5 mb-4" role="group" aria-label="Platform">
+      <button class="plat-btn active rounded-xl border border-[#9EE37D]/30 px-4 py-2.5 text-sm font-bold text-[#F2FBE9]/80 transition-colors" data-limit="280" data-name="X (Twitter)">X &middot; 280</button>
+      <button class="plat-btn rounded-xl border border-[#9EE37D]/30 px-4 py-2.5 text-sm font-bold text-[#F2FBE9]/80 transition-colors" data-limit="500" data-name="Threads">Threads &middot; 500</button>
+      <button class="plat-btn rounded-xl border border-[#9EE37D]/30 px-4 py-2.5 text-sm font-bold text-[#F2FBE9]/80 transition-colors" data-limit="300" data-name="Bluesky">Bluesky &middot; 300</button>
+    </div>
+    <textarea id="threadInput" rows="5" spellcheck="false" placeholder="Paste your long post here…"
+      class="w-full rounded-xl bg-[#0B1A12] border border-[#9EE37D]/25 text-[#F2FBE9] font-mono text-sm p-3.5 focus:border-[#FFD23F] focus:outline-none resize-y placeholder:text-[#F2FBE9]/30"></textarea>
+    <p id="threadError" class="hidden mt-2 text-xs font-semibold text-[#FFD23F] bg-[#FFD23F]/10 border border-[#FFD23F]/30 rounded-lg px-3 py-2"></p>
+    <div class="flex flex-wrap gap-3 mt-4">
+      <button id="splitBtn" class="chunky chunky-green px-8 py-3 text-sm">SPLIT INTO THREAD</button>
+      <button id="threadSampleBtn" class="chunky chunky-ghost px-6 py-3 text-sm">SAMPLE POST</button>
+      <button id="copyAllBtn" class="chunky px-6 py-3 text-sm hidden">COPY ALL</button>
+    </div>
+    <div id="threadOut" class="mt-5 space-y-3"></div>
+  </section>
+
+</main>
+
+<!-- BOTTOM AD (verbatim) -->
+<div class="no-print mx-auto max-w-6xl px-4 sm:px-6 pb-4" role="complementary" aria-label="Advertisement">
+  <div class="mx-auto text-center" style="max-width:728px">
+    <span class="block text-[10px] tracking-[0.18em] uppercase text-slate-400 mb-1.5">Advertisement</span>
+    <div class="flex justify-center overflow-hidden">
+      <script async src="https://js.wpadmngr.com/static/adManager.js" data-admpid="464498"></script>
+    </div>
+  </div>
+</div>
+
+<!-- ============ SEO ARTICLE ============ -->
+<article id="seo-article" class="mx-auto max-w-3xl px-4 sm:px-6 py-10 text-[#F2FBE9]/80 leading-relaxed">
+  <h2 class="font-display text-2xl sm:text-3xl text-white mb-6">The Complete Guide to SMS Character Counting, Segments &amp; Thread Splitting</h2>
+
+  <h3 class="font-display text-lg text-[#9EE37D] mt-8 mb-3">What is an SMS character counter — and why 160 is only half the story</h3>
+  <p class="mb-4">An SMS character counter tells you how long your text message is, but the number it shows is only the beginning. Unlike an email or a chat message, an SMS travels over a signaling channel that was designed in the 1980s with hard physical limits. A single SMS can carry 140 bytes of payload. How many characters fit into those 140 bytes depends entirely on the alphabet your phone uses to encode the message. Type a plain English message and you get the generous GSM-7 alphabet: 160 characters per message. Slip in a single emoji, a curly smart quote, or an em dash, and the entire message silently switches to UCS-2 encoding — and your limit collapses to just 70 characters. That is why a free, accurate SMS character counter like SegText matters: it does not just count characters, it replicates the exact encoding decision your carrier's SMSC will make.</p>
+  <p class="mb-4">Most naive counters get this wrong. They count JavaScript string length and call it a day. But carriers do not bill you for string length — they bill you for septets and code units, for extension-table escape sequences, and for User Data Header overhead on every part of a concatenated message. A message that looks like 161 characters on a naive counter might actually consume 162 septets because it contains a euro sign. SegText implements the real GSM-7 default alphabet from the 3GPP TS 23.038 specification, including all nine extension-table characters that cost two septets each, so the numbers you see here match what your gateway will charge you for.</p>
+
+  <h3 class="font-display text-lg text-[#9EE37D] mt-8 mb-3">GSM-7: the 160-character alphabet</h3>
+  <p class="mb-4">GSM-7 is a 7-bit character set, which means each character is packed into 7 bits instead of 8. Eight of those 7-bit characters fit into 7 bytes, and 160 of them fit into the 140-byte SMS payload (160 × 7 bits = 1120 bits = 140 bytes — the math is exact). The alphabet covers basic Latin letters, digits, common punctuation, and a handful of accented characters like è, é, ü, ñ, and å. It also includes currency symbols that surprise many developers: the pound sign £, the yen sign ¥, and the generic currency sign ¤ are all GSM-7 safe. The euro sign €, on the other hand, lives in the extension table and costs two septets — a classic billing trap for European marketers.</p>
+  <p class="mb-4">The extension table is GSM-7's hidden surcharge. Nine characters — the form feed, caret ^, curly braces { }, backslash \, square brackets [ ], tilde ~, pipe |, and the euro sign € — are encoded as an escape character followed by the character code. Each one consumes two of your 160 septets. A marketing message full of brackets and tildes can lose a dozen billable units without containing a single exotic character. SegText flags every extension-table character it finds so you can see exactly where your septets are going.</p>
+
+  <h3 class="font-display text-lg text-[#9EE37D] mt-8 mb-3">UCS-2: the 70-character fallback</h3>
+  <p class="mb-4">The moment your message contains any character outside the GSM-7 alphabet — an emoji, a smart quote, Chinese or Arabic script, even a humble ellipsis … — the entire message is re-encoded as UCS-2. Each character now takes 16 bits, so only 70 characters fit in the 140-byte payload. Worse, the switch is all-or-nothing: one emoji in a 150-character message does not just cost extra for the emoji, it converts all 150 characters to 16-bit encoding and blows the message up to three segments. This is the single most expensive mistake in bulk SMS, and it is invisible on phones and in most marketing dashboards.</p>
+  <p class="mb-4">There is an important subtlety in how UCS-2 characters are counted. Characters outside the Basic Multilingual Plane — which includes virtually all emoji — are stored as UTF-16 surrogate pairs, consuming two 16-bit code units each. So a message with 35 emoji has used all 70 of its units. SegText counts UCS-2 in code units exactly like the carriers do, so an emoji-heavy message shows its true size, not a flattering underestimate.</p>
+
+  <h3 class="font-display text-lg text-[#9EE37D] mt-8 mb-3">SMS segment calculator math: 160/153 and 70/67</h3>
+  <p class="mb-4">When a message exceeds one segment, it is sent as a concatenated SMS: several segments that the receiving phone reassembles. Each segment after the first needs a 6-byte User Data Header (UDH) so the phone knows the order of the parts and which message they belong to. Those 6 bytes come out of your 140-byte payload. For GSM-7, 6 bytes equals 48 bits, which is just under 7 septets — so each concatenated segment holds 153 characters instead of 160. For UCS-2, 6 bytes equals exactly 3 code units, leaving 67 characters per segment instead of 70. A 161-character GSM-7 message therefore becomes two segments of 153, billed as two messages. This is why the 160-to-161 boundary is the most expensive single character in SMS marketing.</p>
+  <p class="mb-4">A proper SMS segment calculator must also handle the exact boundary conditions. Exactly 160 GSM-7 septets is one segment with zero characters left; 161 septets is two segments with 145 characters left in the second. Exactly 306 septets is two full segments; 307 starts a third. SegText computes segments, per-segment capacity, and remaining characters with these exact rules, and its segment map visualizes how your message is sliced — including mid-word splits, because carriers split on septet boundaries, not on word boundaries.</p>
+
+  <h3 class="font-display text-lg text-[#9EE37D] mt-8 mb-3">Unicode traps: the characters silently doubling your bill</h3>
+  <p class="mb-4">The cruelest SMS billing surprises come from characters you cannot even see. Word processors and phones love to "help" by replacing straight quotes with curly ones (“ ” ‘ ’), hyphens with en and em dashes (– —), and three dots with a proper ellipsis (…). Every one of these forces UCS-2. Zero-width spaces, byte-order marks, and non-breaking spaces pasted from web pages are invisible and equally destructive. SegText's unicode-trap optimizer scans your message for all of these, names each offender, and suggests a GSM-7-safe replacement: curly quotes become straight quotes, em dashes become hyphens, the degree sign becomes the word "deg", and common emoji become ASCII emoticons like :) or text like [ok].</p>
+  <p class="mb-4">The optimizer shows a before-and-after segment comparison, so the savings are concrete rather than theoretical. In practice, cleaning the traps out of a typical pasted marketing message often drops it from two or three UCS-2 segments back to a single GSM-7 segment — cutting the cost of that campaign by half or more with zero change to the message's meaning. The fixes are applied to your text with one tap, and every replacement is shown before you commit, so nothing is rewritten behind your back.</p>
+
+  <h3 class="font-display text-lg text-[#9EE37D] mt-8 mb-3">How SMS pricing works: the cost estimator</h3>
+  <p class="mb-4">SMS gateways, aggregators, and carriers bill per segment, not per message. A "message" of 300 GSM-7 characters is billed as two segments; a 75-character message containing one emoji is billed as two segments as well, because it crosses the 70-unit UCS-2 boundary. Promotional SMS in India typically costs around ₹0.12 to ₹0.25 per segment on domestic routes, while international termination can cost several rupees or tens of cents per segment depending on the destination. These rates multiply fast: a 10,000-recipient campaign at two segments instead of one doubles the entire campaign budget.</p>
+  <p class="mb-4">SegText's cost estimator takes the live segment count from your message and multiplies it by whatever per-segment rate you enter, in your choice of currency. Change the message, and the total updates instantly. It is the fastest way to answer the question every SMS marketer eventually asks: "how much will this exact text cost me to send?" Use it while drafting to keep campaigns inside a single segment, and use the trap optimizer alongside it to squeeze multi-segment drafts back down.</p>
+
+  <h3 class="font-display text-lg text-[#9EE37D] mt-8 mb-3">Thread splitters for X, Threads and Bluesky</h3>
+  <p class="mb-4">A tweet thread splitter solves a different but related problem: social platforms limit each post's length — 280 characters on X (Twitter), 500 on Threads, and 300 on Bluesky — and long-form posts must be divided into a numbered thread. Doing this by hand is tedious and error-prone: split mid-word and the thread looks sloppy; miscount the prefix and a post overflows the limit. SegText's thread splitter divides your text at word boundaries, never breaking a word unless a single word is longer than the limit, and prefixes every chunk with a numbered marker like (1/5).</p>
+  <p class="mb-4">The numbering is smarter than it looks. The prefix itself consumes characters, so the splitter first estimates how many chunks there will be, reserves space for the longest prefix, and re-packs if the digit count changes the total — guaranteeing that no chunk, prefix included, ever exceeds the platform limit. Each chunk shows its own character count so you can verify at a glance, and one-tap copy buttons let you post the thread in order without retyping. Whether you call it a tweet thread splitter, a thread maker, or a long-post divider, the goal is the same: a clean, professional thread with zero manual counting.</p>
+
+  <h3 class="font-display text-lg text-[#9EE37D] mt-8 mb-3">Seven habits that keep SMS in one segment</h3>
+  <p class="mb-4">First, draft in plain text and paste into SegText before you paste into your gateway — word processors inject curly quotes by default. Second, watch the encoding badge: the moment it flips from GSM-7 to UCS-2, find the culprit with the trap scanner. Third, remember the extension-table nine: ^ { } \ [ ] ~ | € and the form feed each cost double, so use them sparingly in tight messages. Fourth, respect the 160/153 cliff — if you are at 158 septets, you have room for two more characters, not twelve. Fifth, shorten URLs with a link shortener before counting, since every character of a long URL burns septets. Sixth, put opt-out language and branding after the core message so truncation, if it ever happens, cuts the least important part. Seventh, price every campaign draft with the cost estimator; a message that is "just a bit over" one segment is the most expensive kind of draft to approve.</p>
+
+  <h3 class="font-display text-lg text-[#9EE37D] mt-8 mb-3">How to use SegText</h3>
+  <p class="mb-4">Type or paste your message into the candybar phone above and watch the LCD update live: encoding, segment count, billable units, characters remaining, and a visual segment map. Press OPTIMIZE or open the Unicode-Trap Optimizer to scan for UCS-2-forcing characters and apply GSM-7-safe fixes with a before-and-after segment comparison. Enter your gateway's per-segment rate in the Cost Estimator to price the message instantly. For social posts, paste your long text into the Thread Splitter, choose X, Threads, or Bluesky, and copy the numbered chunks in order. Everything runs entirely in your browser — your messages are never uploaded, stored, or sent anywhere.</p>
+</article>
+
+<!-- ============ FAQs ============ -->
+<section class="mx-auto max-w-3xl px-4 sm:px-6 pb-12" aria-label="Frequently asked questions">
+  <h2 class="font-display text-2xl text-white mb-6 text-center">Frequently Asked Questions</h2>
+  <div class="space-y-3">
+    <details class="rounded-2xl bg-[#1A3122] border border-[#9EE37D]/20 p-5">
+      <summary class="font-bold text-white cursor-pointer list-none flex justify-between items-center gap-3">Why is my 161-character SMS sent (and billed) as 2 messages?<span class="text-[#FFD23F] text-xl leading-none">+</span></summary>
+      <p class="mt-3 text-sm text-[#F2FBE9]/70 leading-relaxed">A single GSM-7 SMS holds 160 septets. The moment you exceed that, the message becomes a concatenated SMS, and every part needs a 6-byte User Data Header so the receiving phone can reassemble the parts in order. That header consumes about 7 septets, leaving 153 characters per segment. So 161 characters becomes 2 segments (2 × 153 capacity), and you are billed for two messages. This is the most expensive single character in SMS.</p>
+    </details>
+    <details class="rounded-2xl bg-[#1A3122] border border-[#9EE37D]/20 p-5">
+      <summary class="font-bold text-white cursor-pointer list-none flex justify-between items-center gap-3">Which characters force my SMS into UCS-2 encoding?<span class="text-[#FFD23F] text-xl leading-none">+</span></summary>
+      <p class="mt-3 text-sm text-[#F2FBE9]/70 leading-relaxed">Any character outside the GSM-7 alphabet forces the entire message into UCS-2: all emoji, curly "smart" quotes, en/em dashes, the ellipsis …, non-breaking spaces, zero-width characters, and non-Latin scripts like Chinese, Arabic, or Devanagari. Even one such character converts the whole message, dropping the single-segment limit from 160 to 70 characters. SegText's trap scanner finds these characters and suggests GSM-7-safe replacements.</p>
+    </details>
+    <details class="rounded-2xl bg-[#1A3122] border border-[#9EE37D]/20 p-5">
+      <summary class="font-bold text-white cursor-pointer list-none flex justify-between items-center gap-3">How many characters fit in one SMS segment?<span class="text-[#FFD23F] text-xl leading-none">+</span></summary>
+      <p class="mt-3 text-sm text-[#F2FBE9]/70 leading-relaxed">It depends on encoding and whether the message is concatenated. A single-part GSM-7 message holds 160 characters; a single-part UCS-2 message holds 70. In multi-part (concatenated) messages, each segment reserves 6 bytes for the reassembly header, leaving 153 characters per GSM-7 segment and 67 per UCS-2 segment. Nine GSM-7 extension characters (^ { } \ [ ] ~ | €) count double, as do emoji in UCS-2 mode (each takes 2 code units).</p>
+    </details>
+    <details class="rounded-2xl bg-[#1A3122] border border-[#9EE37D]/20 p-5">
+      <summary class="font-bold text-white cursor-pointer list-none flex justify-between items-center gap-3">How do I split a long post into a thread on X, Threads, or Bluesky?<span class="text-[#FFD23F] text-xl leading-none">+</span></summary>
+      <p class="mt-3 text-sm text-[#F2FBE9]/70 leading-relaxed">Paste your text into SegText's thread splitter and pick your platform: X allows 280 characters per post, Threads 500, and Bluesky 300. The splitter divides your text at word boundaries, numbers each chunk like (1/5), and guarantees every chunk — prefix included — stays within the limit. Copy the chunks in order and post them as a reply chain to form the thread.</p>
+    </details>
+    <details class="rounded-2xl bg-[#1A3122] border border-[#9EE37D]/20 p-5">
+      <summary class="font-bold text-white cursor-pointer list-none flex justify-between items-center gap-3">How much does a multi-segment SMS cost to send?<span class="text-[#FFD23F] text-xl leading-none">+</span></summary>
+      <p class="mt-3 text-sm text-[#F2FBE9]/70 leading-relaxed">Gateways bill per segment, so cost = segments × your per-segment rate. Domestic promotional SMS in India typically runs about ₹0.12–₹0.25 per segment; international rates vary by destination. A 2-segment message to 10,000 recipients at ₹0.20/segment costs ₹4,000. Enter your exact rate in SegText's cost estimator to price any draft instantly — and use the trap optimizer to squeeze drafts back into fewer segments.</p>
+    </details>
+    <details class="rounded-2xl bg-[#1A3122] border border-[#9EE37D]/20 p-5">
+      <summary class="font-bold text-white cursor-pointer list-none flex justify-between items-center gap-3">Is SegText's segment math the same as my carrier's?<span class="text-[#FFD23F] text-xl leading-none">+</span></summary>
+      <p class="mt-3 text-sm text-[#F2FBE9]/70 leading-relaxed">Yes — SegText implements the standard 3GPP TS 23.038 rules every GSM carrier follows: the full GSM-7 default alphabet plus the 9-character extension table (each costing 2 septets), UCS-2 fallback for anything outside it, and the 160/153 and 70/67 segment capacities created by the 6-byte concatenation header. Edge cases like the exact 160→161 boundary and surrogate-pair emoji counting are handled exactly as SMSCs do.</p>
+    </details>
+  </div>
+</section>
+
+<!-- ============ FOOTER ============ -->
+<footer class="border-t border-[#9EE37D]/15 mt-auto">
+  <div class="mx-auto max-w-6xl px-4 sm:px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+    <p class="font-display text-white">Seg<span class="text-[#9EE37D]">Text</span> <span class="font-sans font-normal text-xs text-[#F2FBE9]/50">— free SMS tools, unlimited usage</span></p>
+    <nav class="flex items-center gap-5 text-sm font-semibold text-[#F2FBE9]/70">
+      <a href="#top" class="hover:text-[#FFD23F] transition-colors">Home</a>
+      <a href="https://fixoraa.tech" class="hover:text-[#FFD23F] transition-colors">More Tools</a>
+    </nav>
+  </div>
+</footer>
+
+<!-- ============ JSON-LD FAQ SCHEMA ============ -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Why is my 161-character SMS sent (and billed) as 2 messages?",
+      "acceptedAnswer": { "@type": "Answer", "text": "A single GSM-7 SMS holds 160 septets. Beyond that it becomes a concatenated SMS, and every part needs a 6-byte User Data Header for reassembly, leaving 153 characters per segment. So 161 characters becomes 2 segments and is billed as two messages." }
+    },
+    {
+      "@type": "Question",
+      "name": "Which characters force my SMS into UCS-2 encoding?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Any character outside the GSM-7 alphabet — emoji, curly smart quotes, en/em dashes, ellipsis, non-breaking spaces, zero-width characters, and non-Latin scripts — forces the whole message into UCS-2, dropping the single-segment limit from 160 to 70 characters." }
+    },
+    {
+      "@type": "Question",
+      "name": "How many characters fit in one SMS segment?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Single-part: 160 GSM-7 characters or 70 UCS-2 characters. Multi-part: 153 per GSM-7 segment and 67 per UCS-2 segment after the 6-byte concatenation header. Extension characters (^ { } \\ [ ] ~ | €) count double." }
+    },
+    {
+      "@type": "Question",
+      "name": "How do I split a long post into a thread on X, Threads, or Bluesky?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Paste text into SegText's thread splitter, pick X (280), Threads (500) or Bluesky (300). It splits at word boundaries, numbers chunks like (1/5), and keeps every chunk within the limit. Copy in order and post as a reply chain." }
+    },
+    {
+      "@type": "Question",
+      "name": "How much does a multi-segment SMS cost to send?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Cost equals segments times your per-segment rate — for example about ₹0.12–₹0.25 per segment for domestic promotional SMS in India. Use SegText's cost estimator with your exact gateway rate." }
+    },
+    {
+      "@type": "Question",
+      "name": "Is SegText's segment math the same as my carrier's?",
+      "acceptedAnswer": { "@type": "Answer", "text": "Yes. SegText implements 3GPP TS 23.038: the full GSM-7 alphabet, the 9-character extension table at 2 septets each, UCS-2 fallback, and 160/153 and 70/67 segment capacities from the 6-byte concatenation header." }
+    }
+  ]
+}
+</script>
+
+<!-- ============ CORE LOGIC LIB (inlined at build time) ============ -->
+<script id="segtext-sms-thread-splitter-lib">
+// SegText pure logic — true GSM-7 / UCS-2 SMS segment engine, unicode-trap
+// optimizer, thread splitter and cost estimator.
+// Pure functions only. No DOM / window / document / localStorage / navigator.
+// Safe to eval in Node via new Function.
+
+// ---------------------------------------------------------------------------
+// GSM-7 default alphabet (3GPP TS 23.038), as a plain string.
+// Includes control chars \n \r and the ESC char 0x1B as members.
+var GSM7_BASIC =
+  '@£$¥èéùìòÇ\nØø\rÅå' +
+  'Δ_ΦΓΛΩΠΨΣΘΞ\x1BÆæßÉ' +
+  ' !"#$¤%&\'()*+,-./' +
+  '0123456789:;<=>?' +
+  '¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿' +
+  'abcdefghijklmnopqrstuvwxyzäöñüà';
+
+// GSM-7 extension table: each of these needs an ESC prefix, so it costs 2 septets.
+var GSM7_EXT = '\f^~€[\\]|{}';
+
+var _BASIC = {};
+var _EXT = {};
+(function buildSets() {
+  var i;
+  for (i = 0; i < GSM7_BASIC.length; i++) _BASIC[GSM7_BASIC[i]] = true;
+  for (i = 0; i < GSM7_EXT.length; i++) _EXT[GSM7_EXT[i]] = true;
+})();
+
+// Septet cost of a single GSM-7 character: 1 or 2. -1 when not GSM-7.
+function charCost(ch) {
+  if (_BASIC[ch]) return 1;
+  if (_EXT[ch]) return 2;
+  return -1;
+}
+
+// 'GSM-7' if every character is in the basic or extension table, else 'UCS-2'.
+function encodingOf(text) {
+  text = String(text == null ? '' : text);
+  for (var ch of text) {
+    if (!_BASIC[ch] && !_EXT[ch]) return 'UCS-2';
+  }
+  return 'GSM-7';
+}
+
+// Billable units: septets for GSM-7 (extension chars count 2),
+// UTF-16 code units for UCS-2 (an emoji outside the BMP counts 2).
+function countUnits(text) {
+  text = String(text == null ? '' : text);
+  if (encodingOf(text) === 'GSM-7') {
+    var n = 0;
+    for (var ch of text) n += charCost(ch);
+    return n;
+  }
+  return text.length;
+}
+
+// Visible characters (code points), for display purposes.
+function charCount(text) {
+  text = String(text == null ? '' : text);
+  var n = 0;
+  for (var ch of text) n++;
+  return n;
+}
+
+// Carrier segment math.
+// GSM-7: 160 septets single, 153 per part when concatenated (6-byte UDH = 7 septets).
+// UCS-2: 70 code units single, 67 per part when concatenated (6-byte UDH = 3 units).
+function segmentInfo(text) {
+  text = String(text == null ? '' : text);
+  var enc = encodingOf(text);
+  var units = countUnits(text);
+  var single = enc === 'GSM-7' ? 160 : 70;
+  var concat = enc === 'GSM-7' ? 153 : 67;
+  var segments, perSegment, charsLeft;
+  if (units <= single) {
+    segments = 1;
+    perSegment = single;
+    charsLeft = single - units;
+  } else {
+    segments = Math.ceil(units / concat);
+    perSegment = concat;
+    charsLeft = segments * concat - units;
+  }
+  return {
+    encoding: enc,
+    units: units,
+    chars: charCount(text),
+    segments: segments,
+    perSegment: perSegment,
+    charsLeft: charsLeft,
+    singleLimit: single,
+    concatLimit: concat
+  };
+}
+
+// Greedy per-segment slices, splitting by billable units like carriers do.
+function segmentSlices(text) {
+  text = String(text == null ? '' : text);
+  var info = segmentInfo(text);
+  if (info.segments <= 1) return [text];
+  var slices = [];
+  var cur = '';
+  var curUnits = 0;
+  for (var ch of text) {
+    var cost = info.encoding === 'GSM-7' ? charCost(ch) : ch.length;
+    if (curUnits + cost > info.perSegment) {
+      slices.push(cur);
+      cur = '';
+      curUnits = 0;
+    }
+    cur += ch;
+    curUnits += cost;
+  }
+  slices.push(cur);
+  return slices;
+}
+
+// Extension-table characters present in the text (each costs 2 septets).
+function findExtensionChars(text) {
+  text = String(text == null ? '' : text);
+  var out = [];
+  for (var ch of text) {
+    if (_EXT[ch] && out.indexOf(ch) === -1) out.push(ch);
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// Unicode traps: characters that force UCS-2, with GSM-7-safe replacements.
+var UNICODE_TRAPS = {
+  '“': { name: 'Left double quotation mark', replacement: '"' },
+  '”': { name: 'Right double quotation mark', replacement: '"' },
+  '„': { name: 'Low double quotation mark', replacement: '"' },
+  '‘': { name: 'Left single quotation mark', replacement: "'" },
+  '’': { name: 'Right single quotation mark', replacement: "'" },
+  '–': { name: 'En dash', replacement: '-' },
+  '—': { name: 'Em dash', replacement: '-' },
+  '…': { name: 'Ellipsis', replacement: '...' },
+  '\u00a0': { name: 'Non-breaking space', replacement: ' ' },
+  '•': { name: 'Bullet', replacement: '*' },
+  '©': { name: 'Copyright sign', replacement: '(c)' },
+  '®': { name: 'Registered sign', replacement: '(R)' },
+  '™': { name: 'Trademark sign', replacement: '(TM)' },
+  '°': { name: 'Degree sign', replacement: 'deg' },
+  '±': { name: 'Plus-minus sign', replacement: '+/-' },
+  '×': { name: 'Multiplication sign', replacement: 'x' },
+  '÷': { name: 'Division sign', replacement: '/' },
+  '\u200b': { name: 'Zero-width space (invisible)', replacement: '' },
+  '\u200c': { name: 'Zero-width non-joiner (invisible)', replacement: '' },
+  '\u200d': { name: 'Zero-width joiner (invisible)', replacement: '' },
+  '\ufeff': { name: 'Byte-order mark (invisible)', replacement: '' },
+  '😊': { name: 'Smiling face emoji', replacement: ':)' },
+  '😀': { name: 'Grinning face emoji', replacement: ':D' },
+  '😁': { name: 'Beaming face emoji', replacement: ':D' },
+  '😂': { name: 'Face with tears of joy emoji', replacement: ':D' },
+  '🤣': { name: 'Rolling on the floor laughing emoji', replacement: 'haha' },
+  '👍': { name: 'Thumbs up emoji', replacement: '(y)' },
+  '👎': { name: 'Thumbs down emoji', replacement: '(n)' },
+  '🙏': { name: 'Folded hands emoji', replacement: 'thanks' },
+  '🎉': { name: 'Party popper emoji', replacement: 'party' },
+  '⭐': { name: 'Star emoji', replacement: '*' },
+  '🔥': { name: 'Fire emoji', replacement: 'hot' },
+  '✅': { name: 'Check mark emoji', replacement: '[ok]' },
+  '❌': { name: 'Cross mark emoji', replacement: '[x]' },
+  '💯': { name: 'Hundred points emoji', replacement: '100' },
+  '🚀': { name: 'Rocket emoji', replacement: 'launch' },
+  '💰': { name: 'Money bag emoji', replacement: '$' },
+  '❤': { name: 'Heavy black heart emoji', replacement: '<3' },
+  '👋': { name: 'Waving hand emoji', replacement: 'hi' },
+  '😎': { name: 'Smiling face with sunglasses emoji', replacement: 'B)' },
+  '😢': { name: 'Crying face emoji', replacement: ":'(" }
+};
+
+var TRAP_KEYS = Object.keys(UNICODE_TRAPS).sort(function (a, b) {
+  return b.length - a.length;
+});
+
+// Every trap occurrence: { char, index, name, replacement }.
+function findUnicodeTraps(text) {
+  text = String(text == null ? '' : text);
+  var traps = [];
+  var i = 0;
+  while (i < text.length) {
+    var matched = null;
+    var key = null;
+    for (var k = 0; k < TRAP_KEYS.length; k++) {
+      var tk = TRAP_KEYS[k];
+      if (text.substr(i, tk.length) === tk) {
+        matched = UNICODE_TRAPS[tk];
+        key = tk;
+        break;
+      }
+    }
+    if (matched) {
+      traps.push({ char: key, index: i, name: matched.name, replacement: matched.replacement });
+      i += key.length;
+    } else {
+      var ch = text[i];
+      if (ch >= '\uD800' && ch <= '\uDBFF' && i + 1 < text.length) {
+        var pair = text.substr(i, 2);
+        traps.push({ char: pair, index: i, name: 'Unsupported character (forces UCS-2)', replacement: '' });
+        i += 2;
+      } else if (!_BASIC[ch] && !_EXT[ch]) {
+        traps.push({ char: ch, index: i, name: 'Unsupported character (forces UCS-2)', replacement: '' });
+        i += 1;
+      } else {
+        i += 1;
+      }
+    }
+  }
+  return traps;
+}
+
+// Apply a trap list (defaults to detected traps) and return the fixed text.
+function applyReplacements(text, traps) {
+  text = String(text == null ? '' : text);
+  traps = traps || findUnicodeTraps(text);
+  var sorted = traps.slice().sort(function (a, b) { return b.index - a.index; });
+  for (var t = 0; t < sorted.length; t++) {
+    var tr = sorted[t];
+    text = text.slice(0, tr.index) + tr.replacement + text.slice(tr.index + tr.char.length);
+  }
+  return text;
+}
+
+// Full before/after optimization report.
+function optimizeMessage(text) {
+  var traps = findUnicodeTraps(text);
+  var optimized = applyReplacements(text, traps);
+  var before = segmentInfo(text);
+  var after = segmentInfo(optimized);
+  return {
+    traps: traps,
+    optimized: optimized,
+    before: before,
+    after: after,
+    segmentsSaved: before.segments - after.segments,
+    unitsSaved: before.units - after.units
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Thread splitter: smart word-boundary splitting with "(1/5)" numbered prefixes.
+function splitThread(text, limit) {
+  text = String(text == null ? '' : text).replace(/\s+/g, ' ').trim();
+  limit = Math.floor(Number(limit));
+  if (!text || !(limit > 0)) return [];
+  var words = text.split(' ');
+  function prefixLen(total) {
+    return ('(' + total + '/' + total + ') ').length;
+  }
+  function pack(budget) {
+    budget = Math.max(1, budget);
+    var chunks = [];
+    var cur = '';
+    var curLen = 0;
+    words.forEach(function (w) {
+      if (w.length > budget) {
+        // Overlong single word: hard-split it.
+        if (cur) { chunks.push(cur); cur = ''; curLen = 0; }
+        var rest = w;
+        while (rest.length > budget) {
+          chunks.push(rest.slice(0, budget));
+          rest = rest.slice(budget);
+        }
+        if (rest) { cur = rest; curLen = rest.length; }
+        return;
+      }
+      var need = curLen === 0 ? w.length : curLen + 1 + w.length;
+      if (need > budget) {
+        chunks.push(cur);
+        cur = w;
+        curLen = w.length;
+      } else {
+        cur = curLen === 0 ? w : cur + ' ' + w;
+        curLen = need;
+      }
+    });
+    if (cur) chunks.push(cur);
+    return chunks;
+  }
+  var est = pack(limit).length;
+  var chunks = pack(limit - prefixLen(est));
+  var total = chunks.length;
+  var plen = prefixLen(total);
+  if (plen !== prefixLen(est)) {
+    chunks = pack(limit - plen);
+    total = chunks.length;
+  }
+  return chunks.map(function (c, i) {
+    return '(' + (i + 1) + '/' + total + ') ' + c;
+  });
+}
+
+// Social platforms and their post length limits.
+var PLATFORMS = [
+  { id: 'x', name: 'X (Twitter)', limit: 280 },
+  { id: 'threads', name: 'Threads', limit: 500 },
+  { id: 'bluesky', name: 'Bluesky', limit: 300 }
+];
+
+function platformById(id) {
+  for (var i = 0; i < PLATFORMS.length; i++) {
+    if (PLATFORMS[i].id === id) return PLATFORMS[i];
+  }
+  return PLATFORMS[0];
+}
+
+// ---------------------------------------------------------------------------
+// Cost estimator: total = segments × price per segment.
+function estimateCost(segments, pricePer) {
+  segments = Number(segments);
+  pricePer = Number(pricePer);
+  if (!isFinite(segments) || !isFinite(pricePer) || segments < 0 || pricePer < 0) return NaN;
+  return segments * pricePer;
+}
+
+</script>
+
+<!-- ============ UI WIRING ============ -->
+<script>
+(function () {
+  'use strict';
+  function $(id) { return document.getElementById(id); }
+  function esc(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  var msgInput = $('msgInput'), encBadge = $('encBadge'), encNote = $('encNote'),
+      segBig = $('segBig'), unitsVal = $('unitsVal'), leftVal = $('leftVal'),
+      perSegVal = $('perSegVal'), segBar = $('segBar'), segMapLabel = $('segMapLabel'),
+      extNote = $('extNote'), trapNote = $('trapNote'), charVal = $('charVal'),
+      msgError = $('msgError');
+
+  var lastInfo = segmentInfo('');
+
+  function toast(msg) {
+    var t = document.createElement('div');
+    t.className = 'fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] bg-[#FFD23F] text-[#12241A] font-bold text-sm px-5 py-3 rounded-xl shadow-lg';
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(function () { t.remove(); }, 2200);
+  }
+
+  function copyText(text, doneMsg) {
+    function done() { toast(doneMsg || 'Copied to clipboard'); }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, function () { fallback(); });
+    } else { fallback(); }
+    function fallback() {
+      var ta = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); done(); } catch (e) { toast('Copy failed — select the text manually'); }
+      ta.remove();
+    }
+  }
+
+  function showError(el, msg) {
+    if (!msg) { el.classList.add('hidden'); el.textContent = ''; return; }
+    el.textContent = msg; el.classList.remove('hidden');
+  }
+
+  function renderSegBar(info, slices) {
+    segBar.innerHTML = '';
+    slices.forEach(function (s, i) {
+      var units = info.encoding === 'GSM-7' ? (function () { var n = 0; for (var ch of s) n += charCost(ch); return n; })() : s.length;
+      var pct = Math.max(4, Math.round(units / info.perSegment * 100));
+      var d = document.createElement('div');
+      d.className = 'seg-block rounded-md bg-[#12241A]/85 border border-[#12241A]/40';
+      d.style.width = pct + '%';
+      d.title = 'Segment ' + (i + 1) + ': ' + units + ' units';
+      var label = document.createElement('span');
+      label.className = 'block text-center font-mono text-[9px] font-bold text-[#9EE37D] leading-5';
+      label.textContent = i + 1;
+      d.appendChild(label);
+      segBar.appendChild(d);
+    });
+    segMapLabel.textContent = info.segments + ' × ' + info.perSegment;
+  }
+
+  function render() {
+    var text = msgInput.value;
+    var info = segmentInfo(text);
+    lastInfo = info;
+    var slices = segmentSlices(text);
+    encBadge.textContent = info.encoding;
+    encNote.textContent = info.encoding === 'GSM-7'
+      ? '7-bit alphabet · ' + info.perSegment + '/seg'
+      : '16-bit alphabet · ' + info.perSegment + '/seg';
+    segBig.textContent = info.segments;
+    unitsVal.textContent = info.units;
+    leftVal.textContent = info.charsLeft;
+    perSegVal.textContent = info.perSegment;
+    charVal.textContent = info.chars + ' chars';
+    renderSegBar(info, slices);
+
+    var ext = findExtensionChars(text);
+    if (ext.length) {
+      extNote.classList.remove('hidden');
+      extNote.textContent = '⚠ counts double (2 septets): ' + ext.join(' ');
+    } else { extNote.classList.add('hidden'); }
+
+    var trapCount = findUnicodeTraps(text).length;
+    if (trapCount > 0 && info.encoding === 'UCS-2') {
+      trapNote.classList.remove('hidden');
+      trapNote.innerHTML = '<span class="bg-[#12241A] text-[#FFD23F] rounded px-2 py-0.5">⚠ ' + trapCount + ' unicode trap' + (trapCount > 1 ? 's' : '') + ' forcing UCS-2 — press OPTIMIZE</span>';
+    } else { trapNote.classList.add('hidden'); trapNote.innerHTML = ''; }
+
+    showError(msgError, '');
+    updateCost();
+    saveDraft();
+  }
+
+  // ---------- storage ----------
+  function saveDraft() {
+    try {
+      localStorage.setItem('segtext-msg', msgInput.value);
+      localStorage.setItem('segtext-price', $('priceInput').value);
+      localStorage.setItem('segtext-cur', $('currencySel').value);
+    } catch (e) {}
+  }
+  function loadDraft() {
+    try {
+      var m = localStorage.getItem('segtext-msg');
+      if (m) msgInput.value = m;
+      var p = localStorage.getItem('segtext-price');
+      if (p !== null) $('priceInput').value = p;
+      var c = localStorage.getItem('segtext-cur');
+      if (c) $('currencySel').value = c;
+    } catch (e) {}
+  }
+
+  // ---------- optimizer ----------
+  function scanTraps() {
+    var text = msgInput.value;
+    var empty = $('trapEmpty'), res = $('trapResult');
+    if (!text.trim()) {
+      empty.classList.remove('hidden'); res.classList.add('hidden');
+      empty.textContent = 'Type a message first — nothing to scan yet.';
+      return;
+    }
+    var rep = optimizeMessage(text);
+    empty.classList.add('hidden'); res.classList.remove('hidden');
+    $('beforeSeg').textContent = rep.before.segments;
+    $('beforeEnc').textContent = rep.before.encoding + ' · ' + rep.before.units + 'u';
+    $('afterSeg').textContent = rep.after.segments;
+    $('afterEnc').textContent = rep.after.encoding + ' · ' + rep.after.units + 'u';
+    var saved = $('savedLine');
+    if (rep.traps.length === 0) {
+      saved.textContent = '✓ Clean — no unicode traps found. Already pure ' + rep.before.encoding + '.';
+    } else if (rep.segmentsSaved > 0) {
+      saved.textContent = '✓ Fixes save ' + rep.segmentsSaved + ' segment' + (rep.segmentsSaved > 1 ? 's' : '') + ' (' + rep.unitsSaved + ' units).';
+    } else {
+      saved.textContent = '✓ ' + rep.traps.length + ' trap' + (rep.traps.length > 1 ? 's' : '') + ' found — applying fixes keeps ' + rep.after.segments + ' segment(s).';
+    }
+    var list = $('trapList');
+    list.innerHTML = '';
+    var seen = {};
+    rep.traps.forEach(function (tr) {
+      var key = tr.char + '→' + tr.replacement;
+      if (seen[key]) { seen[key].count++; return; }
+      seen[key] = { tr: tr, count: 1 };
+    });
+    Object.keys(seen).forEach(function (k) {
+      var s = seen[k], tr = s.tr;
+      var li = document.createElement('li');
+      li.className = 'flex items-center justify-between gap-3 rounded-xl bg-[#0B1A12] border border-[#9EE37D]/15 px-3.5 py-2.5 text-sm';
+      var ch = tr.char === ' ' ? '\u2423' : (tr.char === '\u00a0' ? '\u2423nbsp' : tr.char);
+      li.innerHTML = '<span class="font-mono"><span class="inline-block bg-[#FFD23F]/15 text-[#FFD23F] rounded px-2 py-0.5 font-bold">' + esc(ch) + '</span>' +
+        ' <span class="text-[#F2FBE9]/40">→</span> ' +
+        '<span class="inline-block bg-[#9EE37D]/15 text-[#9EE37D] rounded px-2 py-0.5 font-bold">' + esc(tr.replacement === '' ? '∅' : tr.replacement) + '</span>' +
+        (s.count > 1 ? ' <span class="text-[#F2FBE9]/40 text-xs">×' + s.count + '</span>' : '') + '</span>' +
+        '<span class="text-xs text-[#F2FBE9]/50 text-right">' + esc(tr.name) + '</span>';
+      list.appendChild(li);
+    });
+    res.dataset.optimized = rep.optimized;
+  }
+
+  // ---------- cost ----------
+  function fmtMoney(n) {
+    if (!isFinite(n)) return '—';
+    return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  function updateCost() {
+    var cur = $('currencySel').value;
+    var price = parseFloat($('priceInput').value);
+    var err = $('costError');
+    if (!isFinite(price) || price < 0) {
+      showError(err, 'Enter a valid per-segment price (0 or more).');
+      $('costTotal').textContent = cur + '—';
+      return;
+    }
+    showError(err, '');
+    var total = estimateCost(lastInfo.segments, price);
+    $('costTotal').textContent = cur + fmtMoney(total);
+    $('costSegs').textContent = lastInfo.segments;
+    $('costRate').textContent = cur + fmtMoney(price);
+  }
+
+  // ---------- thread splitter ----------
+  var platLimit = 280, platName = 'X (Twitter)';
+  document.querySelectorAll('.plat-btn').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.querySelectorAll('.plat-btn').forEach(function (x) { x.classList.remove('active'); });
+      b.classList.add('active');
+      platLimit = parseInt(b.dataset.limit, 10);
+      platName = b.dataset.name;
+    });
+  });
+
+  function renderThreads() {
+    var text = $('threadInput').value;
+    var out = $('threadOut');
+    out.innerHTML = '';
+    $('copyAllBtn').classList.add('hidden');
+    if (!text.trim()) {
+      showError($('threadError'), 'Paste your long post first — there is nothing to split yet.');
+      return;
+    }
+    showError($('threadError'), '');
+    var chunks = splitThread(text, platLimit);
+    if (!chunks.length) {
+      showError($('threadError'), 'Could not split that text — try a longer post.');
+      return;
+    }
+    $('copyAllBtn').classList.remove('hidden');
+    $('copyAllBtn').onclick = function () { copyText(chunks.join('\n\n'), chunks.length + ' chunks copied — post them in order'); };
+    var head = document.createElement('p');
+    head.className = 'text-sm font-bold text-[#9EE37D]';
+    head.textContent = chunks.length + ' post' + (chunks.length > 1 ? 's' : '') + ' for ' + platName + ' — each fits ' + platLimit + ' chars';
+    out.appendChild(head);
+    chunks.forEach(function (c, i) {
+      var card = document.createElement('div');
+      card.className = 'rounded-2xl bg-[#0B1A12] border border-[#9EE37D]/20 p-4';
+      var top = document.createElement('div');
+      top.className = 'flex items-center justify-between mb-2';
+      var badge = document.createElement('span');
+      badge.className = 'font-mono text-xs font-bold bg-[#FFD23F] text-[#12241A] rounded-lg px-2.5 py-1';
+      badge.textContent = (i + 1) + '/' + chunks.length;
+      var count = document.createElement('span');
+      count.className = 'font-mono text-xs text-[#F2FBE9]/50 tick';
+      count.textContent = c.length + ' / ' + platLimit;
+      var cp = document.createElement('button');
+      cp.className = 'text-xs font-bold text-[#9EE37D] hover:text-[#FFD23F] transition-colors';
+      cp.textContent = 'COPY';
+      cp.addEventListener('click', function () { copyText(c, 'Post ' + (i + 1) + ' copied'); });
+      top.appendChild(badge); top.appendChild(count); top.appendChild(cp);
+      var body = document.createElement('p');
+      body.className = 'font-mono text-sm text-[#F2FBE9]/85 whitespace-pre-wrap break-words';
+      body.textContent = c;
+      card.appendChild(top); card.appendChild(body);
+      out.appendChild(card);
+    });
+    try { localStorage.setItem('segtext-thread', text); } catch (e) {}
+  }
+
+  // ---------- samples ----------
+  var SAMPLE_SMS = 'Hi Priya! Your OTP is 482913 — valid for 10 mins. “Please” don’t share it with anyone… 🔥 Reply STOP to opt out.';
+  var SAMPLE_THREAD = 'I spent 6 months studying how SMS billing actually works, and what I found will save you real money. A thread on character counting, segments, and the unicode traps nobody warns you about. First: a single SMS is 140 bytes, not 160 characters. The 160 number only applies to the GSM-7 alphabet. One emoji flips the entire message to UCS-2 and your limit collapses to 70 characters. That is a 56 percent capacity loss from a single smiley face. Second: multi-part messages lose 7 characters per segment to the reassembly header. So 161 characters is not one long message, it is two billed segments. Always respect the 160 to 161 cliff when drafting campaigns. Third: curly quotes, em dashes and invisible zero-width spaces from copy-pasted text all force UCS-2 silently. Scan every draft before you approve it. Your gateway bills segments, not messages. Count like a carrier.';
+
+  // ---------- wire up ----------
+  msgInput.addEventListener('input', render);
+  $('sampleBtn').addEventListener('click', function () { msgInput.value = SAMPLE_SMS; render(); toast('Sample SMS loaded — press SCAN in the optimizer'); });
+  $('clearMsgBtn').addEventListener('click', function () { msgInput.value = ''; render(); msgInput.focus(); });
+  $('copyMsgBtn').addEventListener('click', function () {
+    if (!msgInput.value) { showError(msgError, 'Nothing to copy — type a message first.'); return; }
+    copyText(msgInput.value, 'Message copied');
+  });
+  $('optimizeKeyBtn').addEventListener('click', function () {
+    scanTraps();
+    document.getElementById('trapResult').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  });
+  $('scanBtn').addEventListener('click', scanTraps);
+  $('applyFixBtn').addEventListener('click', function () {
+    var fixed = $('trapResult').dataset.optimized;
+    if (typeof fixed !== 'string') { toast('Scan first, then apply fixes'); return; }
+    msgInput.value = fixed;
+    render(); scanTraps();
+    toast('All GSM-7-safe fixes applied');
+  });
+  $('priceInput').addEventListener('input', function () { updateCost(); saveDraft(); });
+  $('currencySel').addEventListener('change', function () { updateCost(); saveDraft(); });
+  $('splitBtn').addEventListener('click', renderThreads);
+  $('threadSampleBtn').addEventListener('click', function () { $('threadInput').value = SAMPLE_THREAD; renderThreads(); });
+
+  // ---------- init ----------
+  loadDraft();
+  try {
+    var th = localStorage.getItem('segtext-thread');
+    if (th) $('threadInput').value = th;
+  } catch (e) {}
+  render();
+})();
+</script>
+</body>
+</html>
